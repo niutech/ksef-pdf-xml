@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pobieracz e-Faktur KSeF z PDF do XML</title>
+  <meta name="description" content="Pobierz plik XML e-faktury z KSeF na podstawie wizualizacji w pliku PDF.">
+  <meta property="og:image" content="https://ai-gov.pl/ksef-xml/ksef.png">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .drop-zone {
+      position: relative;
+      border: 3px dashed #667eea;
+      border-radius: 15px;
+      padding: 60px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: #f8f9ff;
+    }
+
+    .drop-zone:hover {
+      border-color: #764ba2;
+      background: #f0f2ff;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #4299e1;
+      background: #ebf8ff;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-zone .icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+
+    .drop-zone .label {
+      font-size: 18px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .drop-zone .hint {
+      font-size: 14px;
+      color: #999;
+    }
+
+    #status-box {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .status-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #log {
+      background: #1a202c;
+      color: #a0aec0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 0.82rem;
+      font-family: 'Courier New', monospace;
+      max-height: 260px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    #log .ok   { color: #68d391; }
+    #log .err  { color: #fc8181; }
+    #log .info { color: #63b3ed; }
+    #log .warn { color: #f6e05e; }
+
+    #fields-box {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 12px;
+      font-size: 0.85rem;
+    }
+
+    .fields-grid .key {
+      color: #718096;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .fields-grid .val {
+      color: #2d3748;
+      word-break: break-all;
+    }
+
+    #download-btn {
+      display: none;
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      background: #3182ce;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #download-btn:hover {
+      background: #2b6cb0;
+    }
+
+    #reset-btn {
+      display: none;
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      color: #718096;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #reset-btn:hover {
+      background: #f7fafc;
+    }
+
+    .footer {
+        margin-top: 30px;
+        text-align: center;
+        color: #999;
+        font-size: 12px;
+    }
+
+    .footer a {
+        color: #667eea;
+        text-decoration: none;
+    }
+
+    .footer a:hover {
+        text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Pobieracz e-Faktur KSeF z&nbsp;PDF do&nbsp;XML</h1>
+  <p class="subtitle">Pobierz plik XML e-Faktury z KSeF na podstawie wizualizacji w pliku PDF.</p>
+
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".pdf" />
+    <div class="icon">📤</div>
+    <div class="label">Upuść plik PDF tutaj</div>
+    <div class="hint">lub kliknij, aby wybrać plik</div>
+  </div>
+
+  <div id="fields-box">
+    <div class="status-title" style="margin-top:20px;margin-bottom:8px;">Wyodrębnione dane</div>
+    <div class="fields-grid" id="fields-grid"></div>
+  </div>
+
+  <div id="status-box">
+    <div class="status-title">Dziennik operacji</div>
+    <div id="log"></div>
+  </div>
+
+  <button id="download-btn">⬇️ Pobierz XML</button>
+  <button id="reset-btn">↩ Wgraj inny plik</button>
+
+  <div class="footer">
+    Zobacz również <a href="https://ai-gov.pl/ksef/" target="_blank">Walidator Kodów QR z KSeF</a> i <a href="https://ai-gov.pl/ksef-pdf/" target="_blank">Wizualizator e-Faktur z XML do PDF</a><br>
+    &copy; 2026 <a href="https://niute.ch/">Jerzy Głowacki</a>
+  </div>
+</div>
+
+<script type="module">
+import { PDFParse } from 'https://cdn.jsdelivr.net/npm/pdf-parse@latest/dist/pdf-parse/web/pdf-parse.es.min.js';
+PDFParse.setWorker('https://cdn.jsdelivr.net/npm/pdf-parse@latest/dist/pdf-parse/web/pdf.worker.min.mjs');
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const statusBox = document.getElementById('status-box');
+const logEl = document.getElementById('log');
+const fieldsBox = document.getElementById('fields-box');
+const fieldsGrid = document.getElementById('fields-grid');
+const downloadBtn = document.getElementById('download-btn');
+const resetBtn = document.getElementById('reset-btn');
+
+function log(msg, cls = '') {
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.innerHTML = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function logOk(msg)   { log('✔ ' + msg, 'ok'); }
+function logErr(msg)  { log('✖ ' + msg, 'err'); }
+function logInfo(msg) { log('ℹ ' + msg, 'info'); }
+function logWarn(msg) { log('⚠ ' + msg, 'warn'); }
+
+let xmlBlob = null;
+let xmlFilename = 'faktura.xml';
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+resetBtn.addEventListener('click', () => {
+  xmlBlob = null;
+  logEl.innerHTML = '';
+  fieldsGrid.innerHTML = '';
+  statusBox.style.display = 'none';
+  fieldsBox.style.display = 'none';
+  downloadBtn.style.display = 'none';
+  resetBtn.style.display = 'none';
+  dropZone.style.display = '';
+  fileInput.value = '';
+});
+
+downloadBtn.addEventListener('click', () => {
+  if (!xmlBlob) return;
+  const url = URL.createObjectURL(xmlBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = xmlFilename;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+async function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    alert('Proszę wybrać plik PDF.');
+    return;
+  }
+  dropZone.style.display = 'none';
+  statusBox.style.display = 'block';
+  fieldsBox.style.display = 'none';
+  downloadBtn.style.display = 'none';
+  resetBtn.style.display = 'block';
+  logEl.innerHTML = '';
+  xmlFilename = file.name.replace(/\.pdf$/i, '.xml');
+
+  try {
+    logInfo('Parsowanie pliku PDF…');
+    const arrayBuffer = await file.arrayBuffer();
+    const parser = new PDFParse({ data: arrayBuffer });
+    const result = await parser.getText();
+    const text = result.text;
+    console.log(text);
+    logOk('PDF sparsowany pomyślnie.');
+
+    const fields = extractFields(text);
+    showFields(fields);
+    if (!fields.InvoiceNumber) throw new Error('Nie znaleziono numeru faktury w pliku PDF.');
+    if (!fields.TotalAmount) throw new Error('Nie znaleziono kwoty należności w pliku PDF.');
+    if (!fields.QrCodeURL)  throw new Error('Nie znaleziono URL kodu QR w pliku PDF.');
+    logInfo('Wyodrębniono dane z pliku PDF.');
+
+    const corsProxyUrl = 'https://ai-gov.pl/proxy.php?url=';
+
+    if (!fields.KSeFNumber) {
+      logInfo('Pobieranie numeru KSeF…');
+      const getResp = await fetch(corsProxyUrl + encodeURIComponent(fields.QrCodeURL), {credentials: 'include'});
+      const getHtml = await getResp.text();
+      const numberMatch = getHtml.match(/<input[^>]+name="KsefNumber"[^>]+value="([^"]+)"/);
+      if (!numberMatch) throw new Error('Nie znaleziono numeru KSeF w odpowiedzi.');
+      fields.KSeFNumber = numberMatch[1];
+      logOk('Numer KSeF pobrany.');
+      await sleep(Math.random() * 2);
+    }
+
+    logInfo('Pobieranie tokenu weryfikacyjnego…');
+    const baseVerifyUrl = fields.QrCodeURL.replace('pl/invoice', 'pl/client-app/invoice') + '/' + fields.KSeFNumber + '/verify-download';
+    const getResp = await fetch(corsProxyUrl + encodeURIComponent(baseVerifyUrl), {
+      credentials: 'include',
+      referrer: fields.QrCodeURL
+    });
+    const getHtml = await getResp.text();
+    const tokenMatch = getHtml.match(/<input[^>]+name="__RequestVerificationToken"[^>]+value="([^"]+)"/);
+    if (!tokenMatch) throw new Error('Nie znaleziono tokenu weryfikacyjnego w odpowiedzi.');
+    const verificationToken = tokenMatch[1];
+    logOk('Token weryfikacyjny pobrany.');
+    await sleep(Math.random() * 2);
+
+    logInfo('Wysyłanie danych weryfikacyjnych…');
+    const bodyParams = new URLSearchParams({
+      InvoiceNumber: fields.InvoiceNumber || '',
+      BuyerIdentifierType: fields.BuyerIDType || 'None',
+      BuyerIdentifierValue: fields.BuyerTaxID || '',
+      Amount: fields.TotalAmount || '',
+      __RequestVerificationToken: verificationToken
+    });
+    const postResp = await fetch(corsProxyUrl + encodeURIComponent(baseVerifyUrl + '?handler=Format'), {
+      method: 'POST',
+      credentials: 'include',
+      referrer: baseVerifyUrl,
+      headers: {'content-type': 'application/x-www-form-urlencoded'},
+      body: bodyParams.toString(),
+      redirect: 'manual'
+    });
+    let baseDownloadUrl = baseVerifyUrl.replace('verify-', '');
+    if (postResp.status !== 0 && postResp.status !== 301 && postResp.status !== 302) {
+      const errText = await postResp.text();
+      throw new Error(`Nieoczekiwany status POST: ${postResp.status}\n${errText.slice(0, 300)}`);
+    }
+    logOk('Weryfikacja danych pomyślna.');
+
+    logInfo('Pobieranie danych XML…');
+    const dlResp = await fetch(corsProxyUrl + encodeURIComponent(baseDownloadUrl), {
+      credentials: 'include',
+      referrer: baseVerifyUrl
+    });
+    const dlHtml = await dlResp.text();
+    const xmlData = extractXmlFromHtml(dlHtml);
+    if (!xmlData) throw new Error('Nie znaleziono danych XML w odpowiedzi.');
+    downloadXml(xmlData);
+  } catch (err) {
+    logErr(escHtml(err.message || String(err)) + '<br>Pobierz XML poprzez URL z kodu QR');
+    resetBtn.style.display = 'block';
+  }
+}
+
+function extractXmlFromHtml(html) {
+  const match = html.match(/id="invoiceConfig"[^>]+data-xml-text="([^"]+)"/);
+  if (!match) return null;
+  try {
+    return atob(match[1].replace(/&#x2B;/g, '+'));
+  } catch {
+    return null;
+  }
+}
+
+function downloadXml(xmlText) {
+  xmlBlob = new Blob([xmlText], { type: 'application/xml' });
+  logOk('Plik XML pobrany pomyślnie!');
+  downloadBtn.style.display = 'block';
+  downloadBtn.click();
+}
+
+function extractFields(text) {
+  const t = text;
+  const invoiceNumMatch = t.match(/(?:Invoice number|Numer Faktury):?\s*([^\n]+)/i);
+  const InvoiceNumber = invoiceNumMatch ? invoiceNumMatch[1].trim() : '';
+
+  const ksefMatch = t.match(/(?:KSeF number|Numer KSEF):?\s*(\d{10}-\d{8}-\w{12}-\w{2})/i)
+    || t.match(/(\d{10}-\d{8}-\w{12}-\w{2})/);
+  const KSeFNumber = ksefMatch ? ksefMatch[1].trim() : '';
+
+  let BuyerTaxID = '';
+  let BuyerIDType = 'None';
+  const nipMatch = t.match(/(?:Buyer|Nabywca)\s*\n\s*(?:NIP):\s*([^\n]+)/i);
+  const vatEuMatch = t.match(/(?:Buyer|Nabywca)\s*\n\s*(?:VAT-EU number|Numer VAT-UE):\s*([^\n]+)/i);
+  const otherTaxMatch = t.match(/(?:Buyer|Nabywca)\s*\n\s*(?:Other tax ID|Identyfikator podatkowy inny):\s*([^\n]+)/i);
+  if (nipMatch) {
+    BuyerTaxID = nipMatch[1].trim().replace(/\s+/g, '');
+    BuyerIDType = 'Nip';
+  } else if (vatEuMatch) {
+    BuyerTaxID = vatEuMatch[1].trim().replace(/\s+/g, '');
+    BuyerIDType = 'VatUe';
+  } else if (otherTaxMatch) {
+    BuyerTaxID = otherTaxMatch[1].trim().replace(/\s+/g, '');
+    BuyerIDType = 'Other';
+  }
+
+  const totalMatch = t.match(/(?:Total amount due|Kwota należności ogółem|Total):\s*([\d\s.,]+)/i);
+  const TotalAmount = totalMatch ? totalMatch[1].trim().replace(/\s+/g, '').replace('.', ',') : '';
+
+  const qrMatch = t.match(/https:\/\/qr\.ksef\.mf\.gov\.pl\/invoice\/[^\s]+/);
+  const QrCodeURL = qrMatch ? qrMatch[0].trim() : '';
+
+  return {InvoiceNumber, KSeFNumber, BuyerTaxID, BuyerIDType, TotalAmount, QrCodeURL};
+}
+
+function showFields(fields) {
+  fieldsBox.style.display = 'block';
+  fieldsGrid.innerHTML = '';
+  const labels = {
+    InvoiceNumber: 'Numer faktury',
+    KSeFNumber:    'Numer KSeF',
+    BuyerTaxID:    'ID podatkowy nabywcy',
+    BuyerIDType:   'Typ ID podatkowego',
+    TotalAmount:   'Kwota należności',
+    QrCodeURL:     'URL z kodu QR'
+  };
+  for (const [key, label] of Object.entries(labels)) {
+    const val = fields[key] || '—';
+    const keyEl = document.createElement('div');
+    keyEl.className = 'key';
+    keyEl.textContent = label;
+    const valEl = document.createElement('div');
+    valEl.className = 'val';
+    valEl.textContent = val;
+    fieldsGrid.appendChild(keyEl);
+    fieldsGrid.appendChild(valEl);
+  }
+}
+
+function sleep(s) { return new Promise(r => setTimeout(r, s * 1000)); }
+function escHtml(s) { return String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>'); }
+</script>
+</body>
+</html>
