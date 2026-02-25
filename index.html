@@ -433,7 +433,7 @@ function extractFields(text) {
   const totalMatch = t.match(/(?:Total amount due|Kwota należności ogółem|Total):\s*([\d\s.,]+)/i);
   const TotalAmount = totalMatch ? totalMatch[1].trim().replace(/\s+/g, '').replace('.', ',') : '';
 
-  const qrMatch = t.match(/https:\/\/qr\.ksef\.mf\.gov\.pl\/invoice\/[^\s]+/);
+  const qrMatch = t.match(/(?:https:\/\/qr\.ksef\.mf\.gov\.pl|https:\/\/api\.ksef\.mf\.gov\.pl\/client-app)\/invoice\/[^\s]+/);
   const QrCodeURL = qrMatch ? qrMatch[0].trim() : '';
 
   return {InvoiceNumber, KSeFNumber, BuyerTaxID, BuyerIDType, TotalAmount, QrCodeURL};
@@ -468,4 +468,5 @@ function escHtml(s) { return String(s).replace(/&/g, '&').replace(/</g, '<').rep
 </script>
 </body>
 </html>
+
 
